@@ -12,6 +12,12 @@ class GameBase(ABC):
     def handle_event(self, event):
         """Optional: einzelne Events behandeln (z.B. Neustart nach Game Over)."""
 
+    def handle_paused_event(self, event):
+        """Optional: Events behandeln, während das Spiel pausiert ist (z.B. Einstellungen ändern)."""
+
+    def draw_pause_extra(self, screen):
+        """Optional: zusätzliche UI im Pause-Overlay zeichnen (z.B. aktuelle Einstellungen)."""
+
     @abstractmethod
     def update(self, dt):
         """Spiellogik pro Frame aktualisieren."""

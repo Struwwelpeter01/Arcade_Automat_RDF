@@ -4,16 +4,28 @@ Später ersetzt der NFC-Statuen-Loader diese feste Liste; bis dahin dient sie
 zum Testen am PC per Maus.
 """
 
+from collections import namedtuple
+
 import pygame
 
 from games.jump_n_run.jump_n_run import JumpNRunGame
 from games.pong.pong import PongGame
 from games.snake.snake import SnakeGame
 
+GameEntry = namedtuple(
+    "GameEntry", "name game_class needs_opponent_choice controls_vs_ai controls_vs_player"
+)
+
 GAMES = [
-    ("Snake", SnakeGame),
-    ("Pong", PongGame),
-    ("Jump'n'Run", JumpNRunGame),
+    GameEntry("Snake", SnakeGame, False, None, None),
+    GameEntry(
+        "Pong",
+        PongGame,
+        True,
+        "Deine Steuerung: W (hoch) / S (runter)",
+        "Spieler 1: W / S      Spieler 2: Pfeil hoch / runter",
+    ),
+    GameEntry("Jump'n'Run", JumpNRunGame, False, None, None),
 ]
 
 ENTRY_WIDTH = 300
@@ -43,11 +55,11 @@ class Menu:
         ]
 
     def handle_event(self, event):
-        """Gibt die gewählte Spielklasse zurück, sobald ein Eintrag angeklickt wurde."""
+        """Gibt den gewählten GameEntry zurück, sobald ein Eintrag angeklickt wurde."""
         if event.type == pygame.MOUSEBUTTONDOWN:
-            for rect, (_, game_class) in zip(self.entry_rects, GAMES):
+            for rect, entry in zip(self.entry_rects, GAMES):
                 if rect.collidepoint(event.pos):
-                    return game_class
+                    return entry
         return None
 
     def draw(self):
@@ -57,9 +69,9 @@ class Menu:
         self.screen.blit(title, title.get_rect(center=(self.screen.get_width() // 2, 100)))
 
         mouse_pos = pygame.mouse.get_pos()
-        for rect, (name, _) in zip(self.entry_rects, GAMES):
+        for rect, entry in zip(self.entry_rects, GAMES):
             hovered = rect.collidepoint(mouse_pos)
             color = (90, 90, 130) if hovered else (60, 60, 90)
             pygame.draw.rect(self.screen, color, rect, border_radius=8)
-            text = self.entry_font.render(name, True, (255, 255, 255))
+            text = self.entry_font.render(entry.name, True, (255, 255, 255))
             self.screen.blit(text, text.get_rect(center=rect.center))

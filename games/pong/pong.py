@@ -1,8 +1,15 @@
-"""Pong: 1 gegen 1. Links W/S, rechts Pfeil hoch/runter."""
+"""Pong: 1 gegen 1 oder gegen eine mittelschwere KI.
+
+Links immer W/S, rechts entweder Pfeil hoch/runter (2. Spieler) oder die KI.
+Im Pause-Menü lässt sich die Ballgeschwindigkeit mit den Pfeiltasten links/rechts
+anpassen; die Paddle-Geschwindigkeit bleibt davon unberührt.
+"""
 
 import pygame
 
+from ai.medium_ai import MediumAI
 from core.game_base import GameBase
+from core.game_modes import VS_AI, VS_PLAYER
 
 PADDLE_WIDTH = 15
 PADDLE_HEIGHT = 100
@@ -10,11 +17,19 @@ PADDLE_SPEED = 400
 BALL_SIZE = 15
 BALL_SPEED = 350
 
+MIN_SPEED_MULTIPLIER = 0.4
+MAX_SPEED_MULTIPLIER = 2.5
+SPEED_STEP = 0.2
+
 
 class PongGame(GameBase):
-    def __init__(self, screen):
+    def __init__(self, screen, mode=VS_PLAYER):
         super().__init__(screen)
+        self.mode = mode
+        self.ai = MediumAI() if mode == VS_AI else None
         self.font = pygame.font.SysFont(None, 64)
+        self.pause_font = pygame.font.SysFont(None, 28)
+        self.ball_speed_multiplier = 1.0
         self._reset()
 
     def _reset(self):
@@ -31,7 +46,8 @@ class PongGame(GameBase):
         width, height = self.screen.get_size()
         self.ball = pygame.Rect(0, 0, BALL_SIZE, BALL_SIZE)
         self.ball.center = (width // 2, height // 2)
-        self.ball_velocity = [BALL_SPEED * direction, BALL_SPEED * 0.6]
+        speed = BALL_SPEED * self.ball_speed_multiplier
+        self.ball_velocity = [speed * direction, speed * 0.6]
 
     def update(self, dt):
         keys = pygame.key.get_pressed()
@@ -42,10 +58,14 @@ class PongGame(GameBase):
             self.left_paddle.y -= PADDLE_SPEED * dt
         if keys[pygame.K_s]:
             self.left_paddle.y += PADDLE_SPEED * dt
-        if keys[pygame.K_UP]:
-            self.right_paddle.y -= PADDLE_SPEED * dt
-        if keys[pygame.K_DOWN]:
-            self.right_paddle.y += PADDLE_SPEED * dt
+
+        if self.mode == VS_AI:
+            self._move_ai_paddle(dt)
+        else:
+            if keys[pygame.K_UP]:
+                self.right_paddle.y -= PADDLE_SPEED * dt
+            if keys[pygame.K_DOWN]:
+                self.right_paddle.y += PADDLE_SPEED * dt
 
         self.left_paddle.clamp_ip(bounds)
         self.right_paddle.clamp_ip(bounds)
@@ -67,6 +87,39 @@ class PongGame(GameBase):
         elif self.ball.right >= width:
             self.left_score += 1
             self._reset_ball(direction=-1)
+
+    def _move_ai_paddle(self, dt):
+        game_state = {
+            "ball_center_y": self.ball.centery,
+            "paddle_center_y": self.right_paddle.centery,
+            "dt": dt,
+        }
+        direction = self.ai.decide_action(game_state)
+        self.right_paddle.y += direction * self.ai.max_speed() * dt
+
+    def handle_paused_event(self, event):
+        if event.type != pygame.KEYDOWN:
+            return
+        if event.key == pygame.K_RIGHT:
+            self._change_ball_speed(SPEED_STEP)
+        elif event.key == pygame.K_LEFT:
+            self._change_ball_speed(-SPEED_STEP)
+
+    def _change_ball_speed(self, delta):
+        old_multiplier = self.ball_speed_multiplier
+        new_multiplier = round(min(MAX_SPEED_MULTIPLIER, max(MIN_SPEED_MULTIPLIER, old_multiplier + delta)), 2)
+        if new_multiplier == old_multiplier:
+            return
+        ratio = new_multiplier / old_multiplier
+        self.ball_velocity = [self.ball_velocity[0] * ratio, self.ball_velocity[1] * ratio]
+        self.ball_speed_multiplier = new_multiplier
+
+    def draw_pause_extra(self, screen):
+        width, height = screen.get_size()
+        text = self.pause_font.render(
+            f"<- / -> : Ballgeschwindigkeit ({self.ball_speed_multiplier:.1f}x)", True, (200, 200, 200)
+        )
+        screen.blit(text, text.get_rect(center=(width // 2, height // 2 + 110)))
 
     def draw(self):
         width, height = self.screen.get_size()

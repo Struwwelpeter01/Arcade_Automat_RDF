@@ -1,4 +1,4 @@
-"""Steuert den Ablauf: Hauptmenü -> Spiel -> Pause -> zurück zum Menü.
+"""Steuert den Ablauf: Hauptmenü -> Gegnerauswahl (falls nötig) -> Spiel -> Pause -> zurück zum Menü.
 
 Der Zustand eines pausierten Spiels wird beim Zurückkehren ins Menü verworfen,
 nicht gespeichert.
@@ -7,7 +7,9 @@ nicht gespeichert.
 import pygame
 
 from config.settings import FPS, FULLSCREEN, PAUSE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH
+from core.game_modes import VS_AI, VS_PLAYER
 from ui.menu import Menu
+from ui.opponent_menu import OpponentMenu
 
 BACK_TO_MENU_KEY = pygame.K_m
 
@@ -21,7 +23,9 @@ class StateMachine:
         self.clock = pygame.time.Clock()
 
         self.menu = Menu(self.screen)
-        self.state = "menu"  # "menu" | "game" | "paused"
+        self.state = "menu"  # "menu" | "opponent_select" | "game" | "paused"
+        self.pending_game_entry = None
+        self.opponent_menu = None
         self.current_game = None
 
     def run(self):
@@ -53,13 +57,43 @@ class StateMachine:
 
     def _handle_event(self, event):
         if self.state == "menu":
-            selected_game_class = self.menu.handle_event(event)
-            if selected_game_class is not None:
-                self.current_game = selected_game_class(self.screen)
-                self.state = "game"
+            self._handle_menu_event(event)
+        elif self.state == "opponent_select":
+            self._handle_opponent_select_event(event)
         elif self.state == "game":
             self.current_game.handle_event(event)
-        elif self.state == "paused" and self._wants_back_to_menu(event):
+        elif self.state == "paused":
+            self._handle_paused_event(event)
+
+    def _handle_menu_event(self, event):
+        entry = self.menu.handle_event(event)
+        if entry is None:
+            return
+        if entry.needs_opponent_choice:
+            self.pending_game_entry = entry
+            self.opponent_menu = OpponentMenu(self.screen, entry)
+            self.state = "opponent_select"
+        else:
+            self.current_game = entry.game_class(self.screen)
+            self.state = "game"
+
+    def _handle_opponent_select_event(self, event):
+        result = self.opponent_menu.handle_event(event)
+        if result is None:
+            return
+        if result == "back":
+            self.pending_game_entry = None
+            self.opponent_menu = None
+            self.state = "menu"
+        elif result in (VS_AI, VS_PLAYER):
+            self.current_game = self.pending_game_entry.game_class(self.screen, mode=result)
+            self.pending_game_entry = None
+            self.opponent_menu = None
+            self.state = "game"
+
+    def _handle_paused_event(self, event):
+        self.current_game.handle_paused_event(event)
+        if self._wants_back_to_menu(event):
             self.current_game = None
             self.state = "menu"
 
@@ -76,11 +110,14 @@ class StateMachine:
     def _draw(self):
         if self.state == "menu":
             self.menu.draw()
+        elif self.state == "opponent_select":
+            self.opponent_menu.draw()
         elif self.state == "game":
             self.current_game.draw()
         elif self.state == "paused":
             self.current_game.draw()
             self._draw_pause_overlay()
+            self.current_game.draw_pause_extra(self.screen)
 
     def _draw_pause_overlay(self):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
