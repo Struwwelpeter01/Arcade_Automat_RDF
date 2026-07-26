@@ -7,7 +7,6 @@ nicht gespeichert.
 import pygame
 
 from config.settings import FPS, FULLSCREEN, PAUSE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH
-from core.game_modes import VS_AI, VS_PLAYER
 from ui.menu import Menu
 from ui.opponent_menu import OpponentMenu
 
@@ -85,7 +84,7 @@ class StateMachine:
             self.pending_game_entry = None
             self.opponent_menu = None
             self.state = "menu"
-        elif result in (VS_AI, VS_PLAYER):
+        else:
             self.current_game = self.pending_game_entry.game_class(self.screen, mode=result)
             self.pending_game_entry = None
             self.opponent_menu = None

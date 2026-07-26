@@ -1,6 +1,9 @@
+"""Schwere Pong-KI: reagiert schnell und präzise, hoher Tempo-Deckel."""
+
 from ai.ai_base import AIBase
 
 
 class HardAI(AIBase):
-    def decide_action(self, game_state):
-        raise NotImplementedError
+    reaction_delay = 0.05
+    error_margin = 6
+    max_speed_value = 340

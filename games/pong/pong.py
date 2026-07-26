@@ -1,4 +1,4 @@
-"""Pong: 1 gegen 1 oder gegen eine mittelschwere KI.
+"""Pong: 1 gegen 1 oder gegen eine KI (leicht/mittel/schwer/dynamisch).
 
 Links immer W/S, rechts entweder Pfeil hoch/runter (2. Spieler) oder die KI.
 Im Pause-Menü lässt sich die Ballgeschwindigkeit mit den Pfeiltasten links/rechts
@@ -7,9 +7,19 @@ anpassen; die Paddle-Geschwindigkeit bleibt davon unberührt.
 
 import pygame
 
+from ai.dynamic_ai import DynamicAI
+from ai.easy_ai import EasyAI
+from ai.hard_ai import HardAI
 from ai.medium_ai import MediumAI
 from core.game_base import GameBase
-from core.game_modes import VS_AI, VS_PLAYER
+from core.game_modes import AI_DYNAMIC, AI_EASY, AI_HARD, AI_MEDIUM, VS_PLAYER
+
+AI_CLASSES = {
+    AI_EASY: EasyAI,
+    AI_MEDIUM: MediumAI,
+    AI_HARD: HardAI,
+    AI_DYNAMIC: DynamicAI,
+}
 
 PADDLE_WIDTH = 15
 PADDLE_HEIGHT = 100
@@ -26,7 +36,8 @@ class PongGame(GameBase):
     def __init__(self, screen, mode=VS_PLAYER):
         super().__init__(screen)
         self.mode = mode
-        self.ai = MediumAI() if mode == VS_AI else None
+        ai_class = AI_CLASSES.get(mode)
+        self.ai = ai_class() if ai_class else None
         self.font = pygame.font.SysFont(None, 64)
         self.pause_font = pygame.font.SysFont(None, 28)
         self.ball_speed_multiplier = 1.0
@@ -59,7 +70,7 @@ class PongGame(GameBase):
         if keys[pygame.K_s]:
             self.left_paddle.y += PADDLE_SPEED * dt
 
-        if self.mode == VS_AI:
+        if self.ai is not None:
             self._move_ai_paddle(dt)
         else:
             if keys[pygame.K_UP]:
@@ -83,9 +94,13 @@ class PongGame(GameBase):
 
         if self.ball.left <= 0:
             self.right_score += 1
+            if self.ai is not None:
+                self.ai.on_point_scored(ai_scored=True)
             self._reset_ball(direction=1)
         elif self.ball.right >= width:
             self.left_score += 1
+            if self.ai is not None:
+                self.ai.on_point_scored(ai_scored=False)
             self._reset_ball(direction=-1)
 
     def _move_ai_paddle(self, dt):
