@@ -1,0 +1,4 @@
+pygame-ce>=2.5
+# NFC-Reader (z.B. PN532 via SPI/I2C) - Treiber je nach gewähltem Modul anpassen
+# nfcpy oder adafruit-circuitpython-pn532
+# RPi.GPIO oder gpiozero, falls Buttons/Joystick direkt über GPIO statt USB laufen

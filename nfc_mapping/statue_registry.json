@@ -1,0 +1,17 @@
+{
+  "_kommentar": "UID der NFC-Chips -> welches Spiel geladen wird. UIDs nach dem Beschreiben der Chips eintragen.",
+  "games": {
+    "UID_SNAKE": {
+      "game_class": "games.snake.snake.SnakeGame",
+      "name": "Snake"
+    },
+    "UID_PONG": {
+      "game_class": "games.pong.pong.PongGame",
+      "name": "Pong"
+    },
+    "UID_JUMP_N_RUN": {
+      "game_class": "games.jump_n_run.jump_n_run.JumpNRunGame",
+      "name": "Jump'n'Run"
+    }
+  }
+}

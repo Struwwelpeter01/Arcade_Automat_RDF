@@ -1,0 +1,15 @@
+{
+  "_kommentar": "UID der 4 Spieler-Statuen und der 4 KI-Statuen -> Profil-Zuordnung.",
+  "players": {
+    "UID_PLAYER_1": { "name": "Spieler 1" },
+    "UID_PLAYER_2": { "name": "Spieler 2" },
+    "UID_PLAYER_3": { "name": "Spieler 3" },
+    "UID_PLAYER_4": { "name": "Spieler 4" }
+  },
+  "ai": {
+    "UID_AI_EASY": { "difficulty": "easy" },
+    "UID_AI_MEDIUM": { "difficulty": "medium" },
+    "UID_AI_HARD": { "difficulty": "hard" },
+    "UID_AI_DYNAMIC": { "difficulty": "dynamic" }
+  }
+}
