@@ -1,21 +1,12 @@
-"""Zwischen-Menü nach der Spielauswahl: KI-Schwierigkeit oder 2. Spieler wählen,
-inkl. Steuerungsanzeige."""
+"""Zwischen-Menü nach der Spielauswahl: Modus wählen (Solo/KI-Stufe/2. Spieler je
+nach Spiel), inkl. Steuerungsanzeige. Die Optionen kommen vom jeweiligen GameEntry
+(ui/menu.py), damit jedes Spiel seine eigene Auswahl mitbringen kann."""
 
 import pygame
 
-from core.game_modes import AI_DYNAMIC, AI_EASY, AI_HARD, AI_MEDIUM, VS_PLAYER
-
-BUTTON_WIDTH = 360
+BUTTON_WIDTH = 380
 BUTTON_HEIGHT = 55
 ROW_HEIGHT = 95
-
-OPTIONS = [
-    ("Leicht (KI)", AI_EASY),
-    ("Mittel (KI)", AI_MEDIUM),
-    ("Schwer (KI)", AI_HARD),
-    ("Dynamisch (KI)", AI_DYNAMIC),
-    ("2. Spieler", VS_PLAYER),
-]
 
 
 class OpponentMenu:
@@ -24,25 +15,26 @@ class OpponentMenu:
         self.game_entry = game_entry
         self.title_font = pygame.font.SysFont(None, 52)
         self.button_font = pygame.font.SysFont(None, 32)
-        self.control_font = pygame.font.SysFont(None, 22)
+        self.control_font = pygame.font.SysFont(None, 20)
         self.hint_font = pygame.font.SysFont(None, 24)
         self.buttons = self._layout()
 
     def _layout(self):
+        options = self.game_entry.opponent_options
         width, height = self.screen.get_size()
-        total_height = (len(OPTIONS) - 1) * ROW_HEIGHT
+        total_height = (len(options) - 1) * ROW_HEIGHT
         start_y = height // 2 - total_height // 2
         buttons = []
-        for i, (label, mode) in enumerate(OPTIONS):
+        for i, (label, mode, controls_text) in enumerate(options):
             rect = pygame.Rect(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT)
             rect.center = (width // 2, start_y + i * ROW_HEIGHT)
-            buttons.append((rect, label, mode))
+            buttons.append((rect, label, mode, controls_text))
         return buttons
 
     def handle_event(self, event):
         """Gibt den gewählten Modus-String oder "back" zurück, sonst None."""
         if event.type == pygame.MOUSEBUTTONDOWN:
-            for rect, _, mode in self.buttons:
+            for rect, _, mode, _ in self.buttons:
                 if rect.collidepoint(event.pos):
                     return mode
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -53,14 +45,11 @@ class OpponentMenu:
         width = self.screen.get_width()
         self.screen.fill((20, 20, 30))
 
-        title = self.title_font.render(f"{self.game_entry.name} - Gegner wählen", True, (255, 255, 255))
-        self.screen.blit(title, title.get_rect(center=(width // 2, 60)))
+        title = self.title_font.render(f"{self.game_entry.name} - Modus wählen", True, (255, 255, 255))
+        self.screen.blit(title, title.get_rect(center=(width // 2, 55)))
 
         mouse_pos = pygame.mouse.get_pos()
-        for rect, label, mode in self.buttons:
-            controls_text = (
-                self.game_entry.controls_vs_player if mode == VS_PLAYER else self.game_entry.controls_vs_ai
-            )
+        for rect, label, _, controls_text in self.buttons:
             self._draw_button(rect, label, controls_text, mouse_pos)
 
         hint = self.hint_font.render("Esc = zurück zum Hauptmenü", True, (170, 170, 170))
