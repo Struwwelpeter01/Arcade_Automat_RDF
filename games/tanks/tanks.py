@@ -6,9 +6,21 @@ Bewegung ist achsengebunden (keine Diagonalen) - außer das Diagonalfahrt-Poweru
 ist gerade aktiv. Von zwei gleichzeitig gehaltenen Richtungstasten gewinnt immer
 die zuletzt gedrückte, damit sich Richtungswechsel sauber anfühlen.
 
-Alle 30s spawnt ein zufälliges Powerup, das nach weiteren 30s wieder verschwindet,
-falls niemand es einsammelt. Wer es einsammelt, bekommt 15s lang eine Fähigkeit:
-Dauerfeuer, Speed-Boost, ein Schutzschild (blockt einen Treffer) oder Diagonalfahrt.
+Alle 10-15s spawnt ein zufälliges Powerup (fair verteilt über einen Shuffle-Bag,
+damit nicht zufällig ewig derselbe Typ ausbleibt), das nach 30s ungenutzt wieder
+verschwindet. Wer es einsammelt, bekommt 15s lang eine Fähigkeit:
+- Dauerfeuer: Feuertaste halten = durchgehend schnelles Schießen
+- Speed-Boost: schneller fahren
+- Schutzschild: blockt genau einen Treffer
+- Diagonalfahrt: einzige Ausnahme von der Achsenbindung
+Zwei Powerups wirken stattdessen auf den GEGNER (Sabotage statt Selbstbuff):
+- Vergrößerung: der Gegner wird größer (leichteres Ziel)
+- Invertierte Steuerung: alle Richtungstasten des Gegners sind vertauscht
+
+Ohne Powerup kann trotzdem schon mit moderater Feuerrate geschossen werden -
+man ist nicht mehr blockiert, nur weil die eigene letzte Kugel noch fliegt.
+Easter Egg: Sind alle zerstörbaren Mauern weg, fliegen Kugeln am Bildschirmrand
+auf die gegenüberliegende Seite weiter, statt zu verschwinden.
 """
 
 import random
@@ -28,13 +40,15 @@ TANK_SPEED = 170
 BULLET_SPEED = 420
 BULLET_SIZE = 6
 SHOOT_COOLDOWN = 0.25
+BASE_MAX_BULLETS = 3  # so blockiert die eigene fliegende Kugel nicht den nächsten Schuss
 
 UP, DOWN, LEFT, RIGHT = "up", "down", "left", "right"
 DIRECTION_VECTORS = {UP: (0, -1), DOWN: (0, 1), LEFT: (-1, 0), RIGHT: (1, 0)}
+OPPOSITE_DIRECTION = {UP: DOWN, DOWN: UP, LEFT: RIGHT, RIGHT: LEFT}
 DIAGONAL_FACTOR = 0.70710678  # 1/sqrt(2), damit Diagonalfahrt nicht schneller ist
 
 # Powerups
-POWERUP_SPAWN_INTERVAL = 30.0
+POWERUP_SPAWN_INTERVAL_RANGE = (10.0, 15.0)
 POWERUP_LIFETIME = 30.0
 EFFECT_DURATION = 15.0
 POWERUP_SIZE = 22
@@ -43,23 +57,31 @@ RAPID_FIRE = "rapid_fire"
 SPEED_BOOST = "speed"
 SHIELD = "shield"
 DIAGONAL = "diagonal"
-POWERUP_TYPES = [RAPID_FIRE, SPEED_BOOST, SHIELD, DIAGONAL]
+ENLARGE = "enlarge"
+INVERT = "invert"
+POWERUP_TYPES = [RAPID_FIRE, SPEED_BOOST, SHIELD, DIAGONAL, ENLARGE, INVERT]
+DEBUFF_TYPES = {ENLARGE, INVERT}  # wirken auf den Gegner statt auf den Einsammler
 
 RAPID_FIRE_COOLDOWN = 0.08
-RAPID_FIRE_MAX_BULLETS = 4
+RAPID_FIRE_MAX_BULLETS = 6
 SPEED_BOOST_MULTIPLIER = 1.6
+ENLARGE_SCALE = 1.8
 
 POWERUP_STYLE = {
     RAPID_FIRE: ((240, 210, 60), "R"),
     SPEED_BOOST: ((80, 220, 220), "S"),
     SHIELD: ((90, 140, 240), "SH"),
     DIAGONAL: ((190, 90, 220), "D"),
+    ENLARGE: ((255, 90, 90), "L"),
+    INVERT: ((255, 150, 40), "I"),
 }
 POWERUP_LABELS = {
     RAPID_FIRE: "Dauerfeuer",
     SPEED_BOOST: "Speed-Boost",
     SHIELD: "Schutzschild",
     DIAGONAL: "Diagonalfahrt",
+    ENLARGE: "Vergrößert",
+    INVERT: "Invertiert",
 }
 
 # Mauerblöcke (x, y, breite, höhe in Zellen) - werden 180°-symmetrisch gespiegelt,
@@ -92,8 +114,10 @@ class Tank:
         self.color = color
         self.bullets = []
         self.cooldown = 0.0
-        self.effect = None
+        self.effect = None  # Selbstbuff: rapid_fire/speed/shield/diagonal
         self.effect_timer = 0.0
+        self.debuff = None  # vom Gegner verursacht: enlarge/invert
+        self.debuff_timer = 0.0
 
     @property
     def speed(self):
@@ -101,7 +125,7 @@ class Tank:
 
     @property
     def max_bullets(self):
-        return RAPID_FIRE_MAX_BULLETS if self.effect == RAPID_FIRE else 1
+        return RAPID_FIRE_MAX_BULLETS if self.effect == RAPID_FIRE else BASE_MAX_BULLETS
 
     @property
     def shoot_cooldown(self):
@@ -110,6 +134,10 @@ class Tank:
     @property
     def diagonal(self):
         return self.effect == DIAGONAL
+
+    @property
+    def inverted(self):
+        return self.debuff == INVERT
 
     def try_shoot(self):
         if self.cooldown <= 0 and len(self.bullets) < self.max_bullets:
@@ -123,13 +151,27 @@ class Tank:
         self.effect = effect
         self.effect_timer = EFFECT_DURATION
 
+    def apply_debuff(self, debuff):
+        if self.debuff == ENLARGE and debuff != ENLARGE:
+            self._resize(TANK_SIZE)
+        self.debuff = debuff
+        self.debuff_timer = EFFECT_DURATION
+        if debuff == ENLARGE:
+            self._resize(int(TANK_SIZE * ENLARGE_SCALE))
+
     def update_effect(self, dt):
-        if self.effect is None:
-            return
-        self.effect_timer -= dt
-        if self.effect_timer <= 0:
-            self.effect = None
-            self.effect_timer = 0.0
+        if self.effect is not None:
+            self.effect_timer -= dt
+            if self.effect_timer <= 0:
+                self.effect = None
+                self.effect_timer = 0.0
+        if self.debuff is not None:
+            self.debuff_timer -= dt
+            if self.debuff_timer <= 0:
+                if self.debuff == ENLARGE:
+                    self._resize(TANK_SIZE)
+                self.debuff = None
+                self.debuff_timer = 0.0
 
     def consume_shield(self):
         if self.effect == SHIELD:
@@ -137,6 +179,11 @@ class Tank:
             self.effect_timer = 0.0
             return True
         return False
+
+    def _resize(self, size):
+        center = self.rect.center
+        self.rect = pygame.Rect(0, 0, size, size)
+        self.rect.center = center
 
 
 class TankGame(GameBase):
@@ -161,7 +208,8 @@ class TankGame(GameBase):
         self.p1_key_order = []
         self.p2_key_order = []
         self.powerup = None
-        self.powerup_spawn_timer = POWERUP_SPAWN_INTERVAL
+        self._powerup_bag = []
+        self.powerup_spawn_timer = random.uniform(*POWERUP_SPAWN_INTERVAL_RANGE)
 
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
@@ -197,6 +245,12 @@ class TankGame(GameBase):
         else:
             self._move_tank(self.player2, dt, self.p2_key_order, self.p2_reverse, keys)
 
+        # Dauerfeuer: Taste halten löst automatisch weitere Schüsse aus (statt nur bei KEYDOWN).
+        if self.player1.effect == RAPID_FIRE and keys[pygame.K_SPACE]:
+            self.player1.try_shoot()
+        if self.ai is None and self.player2.effect == RAPID_FIRE and keys[pygame.K_RETURN]:
+            self.player2.try_shoot()
+
         for tank in (self.player1, self.player2):
             tank.cooldown = max(0.0, tank.cooldown - dt)
             tank.update_effect(dt)
@@ -224,16 +278,20 @@ class TankGame(GameBase):
                 vx, vy = DIRECTION_VECTORS[direction]
                 dx += vx
                 dy += vy
-            tank.direction = order[-1]
+            facing = order[-1]
             if dx and dy:
                 dx *= DIAGONAL_FACTOR
                 dy *= DIAGONAL_FACTOR
-            self._try_move(tank, dx * tank.speed * dt, dy * tank.speed * dt)
         else:
-            direction = order[-1]
-            tank.direction = direction
-            dx, dy = DIRECTION_VECTORS[direction]
-            self._try_move(tank, dx * tank.speed * dt, dy * tank.speed * dt)
+            facing = order[-1]
+            dx, dy = DIRECTION_VECTORS[facing]
+
+        if tank.inverted:
+            dx, dy = -dx, -dy
+            facing = OPPOSITE_DIRECTION[facing]
+
+        tank.direction = facing
+        self._try_move(tank, dx * tank.speed * dt, dy * tank.speed * dt)
 
     def _apply_ai_action(self, dt):
         action = self.ai.decide_action(self._ai_state(dt))
@@ -268,16 +326,28 @@ class TankGame(GameBase):
         return [(c, r) for c in range(min_col, max_col + 1) for r in range(min_row, max_row + 1)]
 
     def _update_bullets(self, tank, dt):
+        screen_rect = self.screen.get_rect()
+        wrap = not self.wall_cells  # Easter Egg: alle Mauern weg -> Kugeln laufen am Rand um
         remaining = []
         for bullet in tank.bullets:
-            bullet["rect"].x += bullet["dx"] * BULLET_SPEED * dt
-            bullet["rect"].y += bullet["dy"] * BULLET_SPEED * dt
+            rect = bullet["rect"]
+            rect.x += bullet["dx"] * BULLET_SPEED * dt
+            rect.y += bullet["dy"] * BULLET_SPEED * dt
 
-            if not self.screen.get_rect().colliderect(bullet["rect"]):
-                continue
+            if not screen_rect.colliderect(rect):
+                if not wrap:
+                    continue
+                if rect.right < screen_rect.left:
+                    rect.left = screen_rect.right
+                elif rect.left > screen_rect.right:
+                    rect.right = screen_rect.left
+                if rect.bottom < screen_rect.top:
+                    rect.top = screen_rect.bottom
+                elif rect.top > screen_rect.bottom:
+                    rect.bottom = screen_rect.top
 
             hit_wall = False
-            for cell in self._cells_overlapping(bullet["rect"]):
+            for cell in self._cells_overlapping(rect):
                 if cell in self.wall_cells:
                     self.wall_cells.discard(cell)
                     hit_wall = True
@@ -309,7 +379,7 @@ class TankGame(GameBase):
             self.powerup_spawn_timer -= dt
             if self.powerup_spawn_timer <= 0:
                 self._spawn_powerup()
-                self.powerup_spawn_timer = POWERUP_SPAWN_INTERVAL
+                self.powerup_spawn_timer = random.uniform(*POWERUP_SPAWN_INTERVAL_RANGE)
             return
 
         self.powerup["timer"] -= dt
@@ -317,11 +387,25 @@ class TankGame(GameBase):
             self.powerup = None
             return
 
-        for tank in (self.player1, self.player2):
+        for tank, opponent in ((self.player1, self.player2), (self.player2, self.player1)):
             if tank.rect.colliderect(self.powerup["rect"]):
-                tank.apply_effect(self.powerup["type"])
+                self._apply_powerup(tank, opponent, self.powerup["type"])
                 self.powerup = None
                 break
+
+    def _apply_powerup(self, picker, opponent, powerup_type):
+        if powerup_type in DEBUFF_TYPES:
+            opponent.apply_debuff(powerup_type)
+        else:
+            picker.apply_effect(powerup_type)
+
+    def _next_powerup_type(self):
+        # Shuffle-Bag statt random.choice: garantiert, dass jeder Typ einmal
+        # drankommt, bevor sich einer wiederholt - kein Typ bleibt lange aus.
+        if not self._powerup_bag:
+            self._powerup_bag = POWERUP_TYPES.copy()
+            random.shuffle(self._powerup_bag)
+        return self._powerup_bag.pop()
 
     def _spawn_powerup(self):
         free_cells = [
@@ -340,7 +424,7 @@ class TankGame(GameBase):
                 self.player2.rect.inflate(CELL, CELL)
             ):
                 continue
-            self.powerup = {"rect": rect, "type": random.choice(POWERUP_TYPES), "timer": POWERUP_LIFETIME}
+            self.powerup = {"rect": rect, "type": self._next_powerup_type(), "timer": POWERUP_LIFETIME}
             return
 
     def _ai_state(self, dt):
@@ -371,7 +455,11 @@ class TankGame(GameBase):
         for tank in (self.player1, self.player2):
             pygame.draw.rect(self.screen, tank.color, tank.rect, border_radius=3)
             if tank.effect == SHIELD:
-                pygame.draw.circle(self.screen, (120, 180, 255), tank.rect.center, TANK_SIZE, 2)
+                pygame.draw.circle(self.screen, (120, 180, 255), tank.rect.center, tank.rect.width, 2)
+            if tank.debuff == ENLARGE:
+                pygame.draw.rect(self.screen, (255, 60, 60), tank.rect, 2, border_radius=3)
+            if tank.debuff == INVERT:
+                pygame.draw.rect(self.screen, (255, 140, 0), tank.rect, 2, border_radius=3)
             self._draw_barrel(tank)
             for bullet in tank.bullets:
                 pygame.draw.rect(self.screen, (255, 230, 120), bullet["rect"])
@@ -390,14 +478,18 @@ class TankGame(GameBase):
             )
 
     def _draw_effect_status(self, tank, name, x, y):
-        if tank.effect is None:
+        parts = []
+        if tank.effect is not None:
+            parts.append(f"{POWERUP_LABELS[tank.effect]} ({tank.effect_timer:.0f}s)")
+        if tank.debuff is not None:
+            parts.append(f"{POWERUP_LABELS[tank.debuff]} ({tank.debuff_timer:.0f}s)")
+        if not parts:
             return
-        text = f"{name}: {POWERUP_LABELS[tank.effect]} ({tank.effect_timer:.0f}s)"
-        surface = self.hud_font.render(text, True, (255, 230, 150))
+        surface = self.hud_font.render(f"{name}: " + ", ".join(parts), True, (255, 230, 150))
         self.screen.blit(surface, (x, y))
 
     def _draw_barrel(self, tank):
         dx, dy = DIRECTION_VECTORS[tank.direction]
         start = tank.rect.center
-        end = (start[0] + dx * TANK_SIZE, start[1] + dy * TANK_SIZE)
+        end = (start[0] + dx * tank.rect.width, start[1] + dy * tank.rect.width)
         pygame.draw.line(self.screen, (40, 40, 40), start, end, 5)
