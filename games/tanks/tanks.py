@@ -32,7 +32,7 @@ from core.game_base import GameBase
 from core.game_modes import VS_AI, VS_PLAYER
 
 CELL = 32
-COLS = 32
+COLS = 40  # 40 * 32 = 1280, füllt das verbreiterte Fenster passgenau aus
 ROWS = 24
 
 TANK_SIZE = 24
@@ -75,6 +75,8 @@ POWERUP_STYLE = {
     ENLARGE: ((255, 90, 90), "L"),
     INVERT: ((255, 150, 40), "I"),
 }
+WINNER_NAMES = {"player1": "Spieler 1", "player2": "Spieler 2", "ai": "Die KI"}
+
 POWERUP_LABELS = {
     RAPID_FIRE: "Dauerfeuer",
     SPEED_BOOST: "Speed-Boost",
@@ -118,6 +120,7 @@ class Tank:
         self.effect_timer = 0.0
         self.debuff = None  # vom Gegner verursacht: enlarge/invert
         self.debuff_timer = 0.0
+        self.unlimited_bullets = False  # Easter Egg: gesetzt, sobald alle Mauern weg sind
 
     @property
     def speed(self):
@@ -125,6 +128,8 @@ class Tank:
 
     @property
     def max_bullets(self):
+        if self.unlimited_bullets:
+            return float("inf")
         return RAPID_FIRE_MAX_BULLETS if self.effect == RAPID_FIRE else BASE_MAX_BULLETS
 
     @property
@@ -196,6 +201,7 @@ class TankGame(GameBase):
         self.p2_keymap = {pygame.K_UP: UP, pygame.K_DOWN: DOWN, pygame.K_LEFT: LEFT, pygame.K_RIGHT: RIGHT}
         self.p1_reverse = {v: k for k, v in self.p1_keymap.items()}
         self.p2_reverse = {v: k for k, v in self.p2_keymap.items()}
+        self.last_winner = None  # bleibt über _reset() hinweg erhalten, damit er dauerhaft im HUD steht
         self._reset()
 
     def _reset(self):
@@ -251,9 +257,11 @@ class TankGame(GameBase):
         if self.ai is None and self.player2.effect == RAPID_FIRE and keys[pygame.K_RETURN]:
             self.player2.try_shoot()
 
+        walls_gone = not self.wall_cells
         for tank in (self.player1, self.player2):
             tank.cooldown = max(0.0, tank.cooldown - dt)
             tank.update_effect(dt)
+            tank.unlimited_bullets = walls_gone
 
         self._update_bullets(self.player1, dt)
         self._update_bullets(self.player2, dt)
@@ -370,6 +378,7 @@ class TankGame(GameBase):
                 if target.consume_shield():
                     continue
                 self.winner = winner_label
+                self.last_winner = winner_label
             else:
                 remaining.append(bullet)
         shooter.bullets = remaining
@@ -470,9 +479,16 @@ class TankGame(GameBase):
         self._draw_effect_status(self.player1, "Spieler 1", 20, 44)
         self._draw_effect_status(self.player2, label, 20, 66)
 
+        if self.last_winner is not None:
+            last_text = self.hud_font.render(
+                f"Letzter Sieger: {WINNER_NAMES[self.last_winner]}", True, (255, 220, 120)
+            )
+            self.screen.blit(last_text, last_text.get_rect(topright=(self.screen.get_width() - 20, 20)))
+
         if self.winner is not None:
-            names = {"player1": "Spieler 1", "player2": "Spieler 2", "ai": "Die KI"}
-            text = self.font.render(f"{names[self.winner]} gewinnt! - beliebige Taste", True, (255, 255, 255))
+            text = self.font.render(
+                f"{WINNER_NAMES[self.winner]} gewinnt! - beliebige Taste", True, (255, 255, 255)
+            )
             self.screen.blit(
                 text, text.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
             )

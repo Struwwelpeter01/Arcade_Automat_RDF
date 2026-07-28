@@ -2,7 +2,7 @@
 
 import pygame
 
-SCREEN_WIDTH = 1024
+SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 768
 FULLSCREEN = False  # Für den fertigen Automaten auf True stellen
 FPS = 60
